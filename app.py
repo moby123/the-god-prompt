@@ -27,13 +27,18 @@ if question:
 
     try:
         with st.spinner("Seeking divine wisdom..."):
-            context, answers = get_context_and_answer(question)
+            answers = {}
+            for name, db_path in SCRIPTURES.items():
+                context, answer = get_context_and_answer(db_path, question)
+                validation = run_filter_agent(context, answer, question)
+                answers[name] = {"answer": answer, "verdict": validation}
 
         if answers:
             st.markdown("## 📖 Responses from Scriptures:")
-            for scripture, answer in answers.items():
+            for scripture, result in answers.items():
                 st.subheader(f"📜 {scripture}")
-                st.write(answer)
+                st.markdown(f"**Answer:** {result['answer']}")
+                st.markdown(f"**Validation:** {result['verdict']}")
         else:
             st.warning(
                 "⚠️ No response was generated. Try rephrasing your question.")
