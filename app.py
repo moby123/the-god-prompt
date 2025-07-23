@@ -12,26 +12,30 @@ Ask your ethical or spiritual question and receive wisdom drawn from multiple sc
 Choose to view all responses, compare across sources, or get a filtered insight.
 """)
 
-# API Key check
-if not os.getenv("OPENAI_API_KEY"):
+# Check API key availability
+api_key = os.getenv("OPENAI_API_KEY") or os.getenv("openai")
+if not api_key:
     st.error(
-        "❌ OPENAI API key not found. Please set it in Replit Secrets or as an environment variable named 'OPENAI_API_KEY'."
+        "❌ OPENAI API key not found. Please set it in Streamlit secrets as 'OPENAI_API_KEY' or 'openai'."
     )
     st.stop()
 
-# Input section
-question = st.chat_input("Enter your ethical or spiritual question here...")
+# Debug: Show that API key is loaded
+# st.success(f"✅ API Key Loaded: {bool(api_key)}")
+
+# Input section (using text_input instead of chat_input)
+question = st.text_input("❓ Enter your ethical or spiritual question:")
 
 if question:
     st.markdown(f"### 🙋 Your Question:\n> *{question}*")
 
     try:
-        with st.spinner("Seeking divine wisdom..."):
+        with st.spinner("🔍 Seeking divine wisdom..."):
             answers = {}
             for name, db_path in SCRIPTURES.items():
                 context, answer = get_context_and_answer(db_path, question)
-                validation = run_filter_agent(context, answer, question)
-                answers[name] = {"answer": answer, "verdict": validation}
+                verdict = run_filter_agent(context, answer, question)
+                answers[name] = {"answer": answer, "verdict": verdict}
 
         if answers:
             st.markdown("## 📖 Responses from Scriptures:")
