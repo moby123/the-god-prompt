@@ -1,37 +1,42 @@
 import streamlit as st
 from compare_rag_agent import SCRIPTURES, get_context_and_answer, run_filter_agent
+import os
 
+# Set page title and layout
 st.set_page_config(page_title="The God Prompt", layout="centered")
 
-st.title("🌟 The God Prompt")
-st.markdown(
-    "**Ask your deepest spiritual, ethical, or social questions.**\nAnswers are drawn from different scriptures without bias."
-)
+# App header
+st.title("🕊️ The God Prompt")
+st.markdown("""
+Ask your ethical or spiritual question and receive wisdom drawn from multiple scriptures.
+Choose to view all responses, compare across sources, or get a filtered insight.
+""")
 
-# 📝 User Input
-question = st.text_area("What is your question?", height=100)
-anonymize = st.checkbox("Anonymize scripture names", value=True)
-submit = st.button("🙏 Ask the Scriptures")
+# API Key check
+if not os.getenv("OPENAI_API_KEY"):
+    st.error(
+        "❌ OPENAI API key not found. Please set it in Replit Secrets or as an environment variable named 'OPENAI_API_KEY'."
+    )
+    st.stop()
 
-if submit and question.strip():
-    with st.spinner("Consulting the scriptures..."):
-        results = {}
-        for name, path in SCRIPTURES.items():
-            context, answer = get_context_and_answer(path, question)
-            verdict = run_filter_agent(context, answer, question)
-            results[name] = {"answer": answer, "verdict": verdict}
+# Input section
+question = st.chat_input("Enter your ethical or spiritual question here...")
 
-        # Shuffle if anonymized
-        display_keys = list(results.keys())
-        if anonymize:
-            import random
-            random.shuffle(display_keys)
+if question:
+    st.markdown(f"### 🙋 Your Question:\n> *{question}*")
 
-        st.subheader("📖 Responses")
-        for idx, key in enumerate(display_keys, 1):
-            label = f"Response {idx}" if anonymize else key
-            with st.expander(f"🔹 {label}"):
-                st.markdown(f"**Answer**: {results[key]['answer']}")
-                st.markdown(f"**Check**: {results[key]['verdict']}")
-else:
-    st.info("👆 Enter a question and press 'Ask the Scriptures'")
+    try:
+        with st.spinner("Seeking divine wisdom..."):
+            context, answers = get_context_and_answer(question)
+
+        if answers:
+            st.markdown("## 📖 Responses from Scriptures:")
+            for scripture, answer in answers.items():
+                st.subheader(f"📜 {scripture}")
+                st.write(answer)
+        else:
+            st.warning(
+                "⚠️ No response was generated. Try rephrasing your question.")
+
+    except Exception as e:
+        st.error(f"❌ Something went wrong: {e}")
