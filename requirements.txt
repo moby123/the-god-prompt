@@ -1,7 +1,10 @@
-openai
+streamlit
 langchain
-chromadb
-tiktoken
-python-dotenv
 langchain-community
 langchain-openai
+langchain-core
+chromadb
+openai
+tiktoken
+pydantic
+python-dotenv
