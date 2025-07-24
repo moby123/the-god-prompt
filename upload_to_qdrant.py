@@ -1,61 +1,62 @@
 import os
 from langchain_community.vectorstores import Qdrant
-from langchain_community.document_loaders import TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.docstore.document import Document
 from langchain_openai import OpenAIEmbeddings
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import Distance, VectorParams
+from qdrant_client.models import VectorParams, Distance
 
-# Load Qdrant credentials from environment
-qdrant_url = os.getenv("QDRANT_URL")
-qdrant_api_key = os.getenv("QDRANT_API_KEY")
+# Qdrant setup
+QDRANT_URL = os.getenv("QDRANT_URL")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 
-# Initialize Qdrant Client
-client = QdrantClient(
-    url=qdrant_url,
-    api_key=qdrant_api_key,
-)
-
-# Embedding model
+# Initialize embedding model
 embedding = OpenAIEmbeddings()
 
-# Split text into chunks
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=500,
-    chunk_overlap=100
+# Connect to Qdrant
+client = QdrantClient(
+    url=QDRANT_URL,
+    api_key=QDRANT_API_KEY,
 )
 
-# SCRIPTURES = {collection_name: file_path}
-SCRIPTURES = {
+# File paths
+FILES = {
     "gita": "gita_sample.txt",
     "bible": "bible_sample.txt",
     "quran": "quran_sample.txt"
 }
 
-for collection, file_path in SCRIPTURES.items():
+# Chunking setup
+splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+
+for collection, filepath in FILES.items():
     print(f"📖 Processing: {collection}")
 
-    # Load and split
-    loader = TextLoader(file_path)
-    documents = loader.load()
-    docs = text_splitter.split_documents(documents)
+    # Delete collection if exists
+    if client.collection_exists(collection):
+        client.delete_collection(collection)
 
-    # Create collection if it doesn't exist
-    client.recreate_collection(
+    # Recreate the collection
+    client.create_collection(
         collection_name=collection,
-        vectors_config=VectorParams(
-            size=1536,
-            distance=Distance.COSINE
-        )
+        vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
     )
 
-    # Upload to Qdrant
-    Qdrant.from_documents(
-        docs,
-        embedding,
-        url=qdrant_url,
-        api_key=qdrant_api_key,
-        collection_name=collection
+    # Read file content
+    with open(filepath, "r", encoding="utf-8") as f:
+        text = f.read()
+
+    chunks = splitter.split_text(text)
+    docs = [Document(page_content=chunk) for chunk in chunks]
+
+    # ✅ Upload documents using correct constructor
+    vectorstore = Qdrant.from_documents(
+        documents=docs,
+        embedding=embedding,
+        url=QDRANT_URL,
+        prefer_grpc=False,
+        api_key=QDRANT_API_KEY,
+        collection_name=collection,
     )
 
     print(f"✅ Uploaded {len(docs)} chunks to collection '{collection}'")

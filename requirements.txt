@@ -9,3 +9,4 @@ tiktoken
 pydantic
 python-dotenv
 qdrant-client
+requests
