@@ -1,5 +1,4 @@
 import os
-import random
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain.chains import RetrievalQA
 from langchain_community.vectorstores import Chroma
@@ -16,7 +15,7 @@ if not openai_key:
 llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.3, api_key=openai_key)
 embedding = OpenAIEmbeddings(api_key=openai_key)
 
-# 🧠 Custom Answer Prompt with fallback wording
+# 🧠 Custom Answer Prompt
 ANSWER_TEMPLATE = """Answer the question using ONLY the provided scripture context.
 
 If the context does not contain the answer, say exactly:
@@ -29,7 +28,7 @@ Question: {question}
 """
 answer_prompt = PromptTemplate.from_template(ANSWER_TEMPLATE)
 
-# 🛡️ Filter Agent Prompt with fallback validation
+# 🛡️ Filter Agent Prompt
 FILTER_TEMPLATE = """You are a scripture guardian. Ensure the answer sticks to the context and does not hallucinate.
 
 Context:
@@ -53,14 +52,9 @@ filter_prompt = ChatPromptTemplate.from_template(FILTER_TEMPLATE)
 # 📦 Retrieval + Answer Logic
 def get_context_and_answer(db_path, question):
     db = Chroma(persist_directory=db_path, embedding_function=embedding)
-    retriever = db.as_retriever(search_kwargs={"k": 8})  # Increased depth
+    retriever = db.as_retriever(search_kwargs={"k": 8})
     docs = retriever.get_relevant_documents(question)
     context = "\n\n".join([doc.page_content for doc in docs])
-
-    # 🐛 DEBUG: Print what was retrieved
-    print(
-        f"\n📚 Context from {db_path}:\n{'-'*40}\n{context[:1000]}...\n{'-'*40}"
-    )
 
     chain = RetrievalQA.from_chain_type(
         llm=llm,
@@ -86,29 +80,3 @@ SCRIPTURES = {
     "Bible": "./bible_db",
     "Quran": "./quran_db"
 }
-
-# 👂 Input from User
-question = input("❓ Enter your ethical/spiritual question:\n")
-anonymize = input("🔒 Anonymize responses? (y/n): ").strip().lower() == "y"
-
-# 🧪 Run for Each Scripture
-results = {}
-for name, path in SCRIPTURES.items():
-    context, answer = get_context_and_answer(path, question)
-    verdict = run_filter_agent(context, answer, question)
-    results[name] = {"answer": answer, "verdict": verdict}
-
-# 🎭 Shuffle Labels if Anonymous
-labels = list(results.keys())
-if anonymize:
-    random.shuffle(labels)
-    print("\n📜 Anonymous Scripture Responses (with Validation):")
-else:
-    print("\n📖 Scripture Responses (with Validation):")
-
-# 🖥️ Output the Results
-for idx, name in enumerate(labels, 1):
-    label = f"Response {idx}" if anonymize else name
-    print(f"\n🔹 {label}")
-    print(f"📝 Answer: {results[name]['answer']}")
-    print(f"🧪 Check: {results[name]['verdict']}")
