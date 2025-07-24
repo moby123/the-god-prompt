@@ -4,22 +4,22 @@ from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from qdrant_client import QdrantClient
 
-# Map collection names to friendly names
+# 🌍 Map collection names to friendly display names
 SCRIPTURES = {
     "gita": "gita",
     "bible": "bible",
     "quran": "quran"
 }
 
-# Get Qdrant credentials
+# 🔐 Load Qdrant credentials from environment
 QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 
-# Set up embedding and chat models
+# 💡 Set up OpenAI embeddings and LLM
 embedding = OpenAIEmbeddings()
 llm = ChatOpenAI(temperature=0)
 
-# Connect to Qdrant
+# 🔌 Connect to Qdrant
 client = QdrantClient(
     url=QDRANT_URL,
     api_key=QDRANT_API_KEY,
@@ -27,19 +27,28 @@ client = QdrantClient(
 
 
 def get_context_and_answer(collection_name, question):
-    """Search Qdrant collection and generate answer using retrieved docs."""
-    # Create vector store from remote Qdrant collection
+    """🔍 Search Qdrant collection and generate LLM response from retrieved context."""
+    print(f"🔍 Querying collection: {collection_name} for question: {question}")
+
+    # Create LangChain vector store from remote Qdrant collection
     vectorstore = Qdrant(
         client=client,
         collection_name=collection_name,
         embeddings=embedding,
     )
 
-    # Perform similarity search
-    docs = vectorstore.similarity_search(question, k=5)
+    try:
+        docs = vectorstore.similarity_search(question, k=5)
+        print(f"📚 Retrieved {len(docs)} documents.")
+    except Exception as e:
+        raise RuntimeError(f"❌ Qdrant similarity search failed for collection '{collection_name}': {str(e)}")
+
+    if not docs:
+        raise ValueError(f"❌ No documents found in collection '{collection_name}' for query: {question}")
+
     context = "\n\n".join(doc.page_content for doc in docs)
 
-    # Prompt the LLM with context + question
+    # 🧠 Prompt Template for Answer Generation
     prompt = PromptTemplate.from_template("""
 You are a wise and thoughtful scholar. Based on the excerpts below from a sacred text, answer the question truthfully and respectfully.
 
@@ -58,7 +67,7 @@ Answer:
 
 
 def run_filter_agent(context, answer, question):
-    """Run a secondary validation on the answer for coherence and relevance."""
+    """🧪 Evaluate if answer is respectful, relevant, and scripture-aligned."""
     validation_prompt = PromptTemplate.from_template("""
 Given the question:
 {question}
