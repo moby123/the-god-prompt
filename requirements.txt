@@ -8,3 +8,4 @@ openai
 tiktoken
 pydantic
 python-dotenv
+qdrant-client

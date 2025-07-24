@@ -1,82 +1,88 @@
 import os
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain.chains import RetrievalQA
-from langchain_community.vectorstores import Chroma
-from langchain.prompts import PromptTemplate
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_community.vectorstores import Qdrant
+from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_core.prompts import PromptTemplate
+from qdrant_client import QdrantClient
 
-# 🌟 Load LLM and Embeddings
-openai_key = os.getenv("OPENAI_API_KEY") or os.getenv("openai")
-if not openai_key:
-    raise ValueError(
-        "❌ OPENAI API key not found. Please set it in Replit Secrets as 'OPENAI_API_KEY' or 'openai'."
+# Map collection names to friendly names
+SCRIPTURES = {
+    "gita": "gita",
+    "bible": "bible",
+    "quran": "quran"
+}
+
+# Get Qdrant credentials
+QDRANT_URL = os.getenv("QDRANT_URL")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+
+# Set up embedding and chat models
+embedding = OpenAIEmbeddings()
+llm = ChatOpenAI(temperature=0)
+
+# Connect to Qdrant
+client = QdrantClient(
+    url=QDRANT_URL,
+    api_key=QDRANT_API_KEY,
+)
+
+
+def get_context_and_answer(collection_name, question):
+    """Search Qdrant collection and generate answer using retrieved docs."""
+    # Create vector store from remote Qdrant collection
+    vectorstore = Qdrant(
+        client=client,
+        collection_name=collection_name,
+        embeddings=embedding,
     )
 
-llm = ChatOpenAI(model="gpt-3.5-turbo", temperature=0.3, api_key=openai_key)
-embedding = OpenAIEmbeddings(api_key=openai_key)
+    # Perform similarity search
+    docs = vectorstore.similarity_search(question, k=5)
+    context = "\n\n".join(doc.page_content for doc in docs)
 
-# 🧠 Custom Answer Prompt
-ANSWER_TEMPLATE = """Answer the question using ONLY the provided scripture context.
+    # Prompt the LLM with context + question
+    prompt = PromptTemplate.from_template("""
+You are a wise and thoughtful scholar. Based on the excerpts below from a sacred text, answer the question truthfully and respectfully.
 
-If the context does not contain the answer, say exactly:
-"This question is not answered in this scripture."
-
-Context:
+Excerpts:
 {context}
-
-Question: {question}
-"""
-answer_prompt = PromptTemplate.from_template(ANSWER_TEMPLATE)
-
-# 🛡️ Filter Agent Prompt
-FILTER_TEMPLATE = """You are a scripture guardian. Ensure the answer sticks to the context and does not hallucinate.
-
-Context:
-{context}
-
-Answer:
-{answer}
 
 Question:
 {question}
 
-If the answer matches the context or says "This question is not answered in this scripture.", reply with:
-✅ VALID - [brief reason]
+Answer:
+""")
+    chain = prompt | llm
+    response = chain.invoke({"context": context, "question": question})
 
-If not, reply with:
-❌ INVALID - [brief reason]
-"""
-filter_prompt = ChatPromptTemplate.from_template(FILTER_TEMPLATE)
-
-
-# 📦 Retrieval + Answer Logic
-def get_context_and_answer(db_path, question):
-    db = Chroma(persist_directory=db_path, embedding_function=embedding)
-    retriever = db.as_retriever(search_kwargs={"k": 8})
-    docs = retriever.get_relevant_documents(question)
-    context = "\n\n".join([doc.page_content for doc in docs])
-
-    chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        retriever=retriever,
-        chain_type="stuff",
-        chain_type_kwargs={"prompt": answer_prompt})
-    answer = chain.run(question)
-    return context, answer
+    return context, response.content
 
 
-# 🧠 Filter Agent Check
 def run_filter_agent(context, answer, question):
-    messages = filter_prompt.format_messages(context=context,
-                                             answer=answer,
-                                             question=question)
-    response = llm(messages).content
-    return response
+    """Run a secondary validation on the answer for coherence and relevance."""
+    validation_prompt = PromptTemplate.from_template("""
+Given the question:
+{question}
 
+And the following answer:
+{answer}
 
-# 📖 Map of Scriptures
-SCRIPTURES = {
-    "Gita": "./gita_db",
-    "Bible": "./bible_db",
-    "Quran": "./quran_db"
-}
+Check if the answer is:
+- Relevant to the question
+- Respectful and non-judgmental
+- Consistent with the context below
+
+Context:
+{context}
+
+Reply with a short verdict like:
+✅ Valid and helpful  
+⚠️ Relevant but not fully supported  
+❌ Off-topic or inappropriate
+""")
+    chain = validation_prompt | llm
+    result = chain.invoke({
+        "question": question,
+        "answer": answer,
+        "context": context
+    })
+    return result.content

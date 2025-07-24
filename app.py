@@ -5,7 +5,9 @@ from compare_rag_agent import SCRIPTURES, get_context_and_answer, run_filter_age
 # 🔑 API Key check
 openai_key = os.getenv("OPENAI_API_KEY") or os.getenv("openai")
 if not openai_key:
-    st.error("❌ OPENAI API key not found. Please set it in Streamlit Secrets as 'OPENAI_API_KEY'.")
+    st.error(
+        "❌ OPENAI API key not found. Please set it in Streamlit Secrets as 'OPENAI_API_KEY'."
+    )
     st.stop()
 
 # 🧾 Page setup
